@@ -1,0 +1,15 @@
+# Environments
+.venv
+env/
+venv/
+
+# Secrets and Databases
+.env
+*.sqlite3
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Docker (if you don't want to push your local db data)
+pgdata/
