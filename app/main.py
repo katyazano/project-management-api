@@ -1,9 +1,13 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+import io
+import uuid
+
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
-from . import crud, models, schemas, security
+from . import crud, models, schemas, security, s3
 from .database import engine, get_db
 from .config import settings
 
@@ -11,6 +15,8 @@ from .config import settings
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Project Management API", version="1.0.0")
+
+ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
 # ==========================================
 # AUTHENTICATION ROUTES 
@@ -94,6 +100,7 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user)
 ):
+    """Update information about a specific project (owner only)."""
     membership = crud.get_membership_or_404(db, project_id, current_user.id)
 
     if membership.role == models.ProjectRole.VIEWER:
@@ -119,38 +126,111 @@ def delete_project(
     return None
 
 
+
+
+
+# ==========================================
+# PROJECT DOCUMENTS (Upload & List)
+# ==========================================
+@app.get("/project/{project_id}/documents", status_code=status.HTTP_200_OK, response_model=list[schemas.DocumentResponse], tags=["Documents"])
+def get_project_documents(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user)
+):
+    """Retrieve all documents associated with a specific project."""
+    crud.get_membership_or_404(db, project_id, current_user.id)
+    return crud.get_documents_by_project(db, project_id=project_id)
+
+@app.post("/project/{project_id}/documents", status_code=status.HTTP_201_CREATED, response_model=list[schemas.DocumentResponse], tags=["Documents"])
+def upload_document(
+    project_id: int,
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user)
+):
+    """Upload one or more documents to a specific project (owner and editor only)."""
+    membership = crud.get_membership_or_404(db, project_id, current_user.id)
+    if membership.role == models.ProjectRole.VIEWER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Viewers cannot upload documents")
+
+    created_documents = []
+    for file in files:
+        extension = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+        if extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"File '{file.filename}' has an unsupported type. Only .pdf and .docx are allowed."
+            )
+
+        contents = file.file.read()
+        file_size = len(contents)
+
+        s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}"
+        s3.upload_file(io.BytesIO(contents), s3_key, file.content_type)
+
+        document = schemas.DocumentCreate(file_name=file.filename, file_size=file_size, s3_key=s3_key)
+        created_documents.append(crud.create_document(db=db, document=document, project_id=project_id))
+
+    return created_documents
+
+# ==========================================
+# INDIVIDUAL DOCUMENTS (Download, Update, Delete)
+# ==========================================
+@app.get("/document/{document_id}", tags=["Documents"])
+def download_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user)
+):
+    """Download document, if the user has access to the corresponding project"""
+    document, _ = crud.get_document_membership_or_404(db, document_id, current_user.id)
+    url = s3.generate_presigned_url(document.s3_key)
+    return RedirectResponse(url)
+
+
+@app.put("/document/{document_id}", status_code=status.HTTP_200_OK, response_model=schemas.DocumentResponse, tags=["Documents"])
+def update_document(
+    document_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user)
+):
+    """Update an existing document (owner and editor only). This will overwrite the existing file in S3 and update the metadata in the database."""
+    document, membership = crud.get_document_membership_or_404(db, document_id, current_user.id)
+    if membership.role == models.ProjectRole.VIEWER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Viewers cannot update documents")
+
+    extension = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Only .pdf and .docx are allowed.")
+
+    contents = file.file.read()
+    file_size = len(contents)
+
+    s3.upload_file(io.BytesIO(contents), document.s3_key, file.content_type)  # overwrite same S3 key
+
+    return crud.update_document(db, document_id, file_name=file.filename, file_size=file_size)
+
+
+@app.delete("/document/{document_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Documents"])
+def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user)
+):
+    """Delete a specific document (owner and editor only)."""
+    document, membership = crud.get_document_membership_or_404(db, document_id, current_user.id)
+    if membership.role == models.ProjectRole.VIEWER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Viewers cannot delete documents")
+
+    s3.delete_file(document.s3_key)
+    crud.delete_document(db, document_id)
+    return None
+
+
 # #TODO: terminar los siguientes endpoints:
-# # ==========================================
-# # PROJECT DOCUMENTS (Upload & List)
-# # ==========================================
-# @app.get("/project/{project_id}/documents", tags=["Documents"])
-# def get_project_documents(project_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-#     """Return all of the project's documents."""
-#     pass
-
-# @app.post("/project/{project_id}/documents", tags=["Documents"])
-# def upload_document(project_id: int, document: schemas.DocumentCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-#     """Upload document/documents for a specific project."""
-#     pass
-
-# # ==========================================
-# # INDIVIDUAL DOCUMENTS (Download, Update, Delete)
-# # ==========================================
-# @app.get("/document/{document_id}", tags=["Documents"])
-# def download_document(document_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-#     """Download document, if the user has access to the corresponding project."""
-#     pass
-
-# @app.put("/document/{document_id}", tags=["Documents"])
-# def update_document(document_id: int, document_update: schemas.DocumentUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-#     """Update document."""
-#     pass
-
-# @app.delete("/document/{document_id}", tags=["Documents"])
-# def delete_document(document_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-#     """Delete document and remove it from the corresponding project."""
-#     pass
-
+#
 # # ==========================================
 # # ACCESS & INVITATIONS
 # # ==========================================
@@ -159,7 +239,7 @@ def delete_project(
 #     """Grant access to the project for a specific user (owner only)."""
 #     # En FastAPI, poner 'user: str' como parámetro lo convierte automáticamente en un Query Parameter (?user=login)
 #     pass
-
+#
 # # Optional
 # @app.get("/project/{project_id}/share", tags=["Access"])
 # def share_project(project_id: int, email: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
