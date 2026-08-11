@@ -1,4 +1,5 @@
 import io
+from typing import List
 import uuid
 
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
@@ -145,7 +146,7 @@ def get_project_documents(
 @app.post("/project/{project_id}/documents", status_code=status.HTTP_201_CREATED, response_model=list[schemas.DocumentResponse], tags=["Documents"])
 def upload_document(
     project_id: int,
-    files: list[UploadFile] = File(...),
+    files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user)
 ):
@@ -228,9 +229,6 @@ def delete_document(
     crud.delete_document(db, document_id)
     return None
 
-
-# #TODO: terminar los siguientes endpoints:
-#
 # # ==========================================
 # # ACCESS & INVITATIONS
 # # ==========================================
@@ -239,6 +237,10 @@ def delete_document(
 #     """Grant access to the project for a specific user (owner only)."""
 #     # En FastAPI, poner 'user: str' como parámetro lo convierte automáticamente en un Query Parameter (?user=login)
 #     pass
+
+
+# #TODO: terminar los siguientes endpoints:
+#
 #
 # # Optional
 # @app.get("/project/{project_id}/share", tags=["Access"])
