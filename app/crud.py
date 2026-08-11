@@ -75,15 +75,28 @@ def delete_project(db: Session, project_id: int):
 # ==========================================
 # PROJECT MEMBERS
 # ==========================================
-def create_project_member(db: Session, member: schemas.ProjectMemberCreate, project_id: int):
-    db_member = models.ProjectMember(**member.model_dump(), project_id=project_id)
+def create_project_member(db: Session, member: schemas.ProjectMemberCreate):
+    db_member = models.ProjectMember(**member.model_dump())
     db.add(db_member)
     db.commit()
     db.refresh(db_member)
     return db_member
 
-def get_project_members(db: Session, project_id: int):
-    return db.query(models.ProjectMember).filter(models.ProjectMember.project_id == project_id).all()
+def get_project_member(db: Session, project_id: int, user_id: int):
+    return (
+        db.query(models.ProjectMember)
+        .filter(
+            models.ProjectMember.project_id == project_id,
+            models.ProjectMember.user_id == user_id,
+        )
+        .first()
+    )
+
+def update_project_member_role(db: Session, member: models.ProjectMember, role: models.ProjectRole):
+    member.role = role
+    db.commit()
+    db.refresh(member)
+    return member
 
 def is_owner(db: Session, project_id: int, user_id: int) -> bool:
     member = (

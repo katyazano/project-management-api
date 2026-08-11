@@ -229,19 +229,48 @@ def delete_document(
     crud.delete_document(db, document_id)
     return None
 
-# # ==========================================
-# # ACCESS & INVITATIONS
-# # ==========================================
-# @app.post("/project/{project_id}/invite", tags=["Access"])
-# def invite_user(project_id: int, user: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-#     """Grant access to the project for a specific user (owner only)."""
-#     # En FastAPI, poner 'user: str' como parámetro lo convierte automáticamente en un Query Parameter (?user=login)
-#     pass
+# ==========================================
+# ACCESS & INVITATIONS
+# ==========================================
+@app.post("/project/{project_id}/invite", status_code=status.HTTP_200_OK, response_model=schemas.ProjectMemberResponse, tags=["Access"])
+def invite_user(
+    project_id: int,
+    user: str,
+    role: models.InvitableRole = models.InvitableRole.EDITOR,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user)
+):
+    """Invite a user to a project (owner only)."""
+    # Confirm the project exists and the requester is a member
+    membership = crud.get_membership_or_404(db, project_id, current_user.id)
+
+    # Only the owner can invite
+    if membership.role != models.ProjectRole.OWNER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only the project owner can invite users")
+
+    # Find the user being invited
+    invited_user = crud.get_user_by_username(db, username=user)
+    if invited_user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    new_role = models.ProjectRole(role.value)
+    existing_member = crud.get_project_member(db, project_id, invited_user.id)
+
+    if existing_member is not None:
+        # Already a member — treat this as a role change instead of rejecting
+        if existing_member.role == models.ProjectRole.OWNER:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cannot change the owner's role")
+        return crud.update_project_member_role(db, existing_member, new_role)
+
+    member = schemas.ProjectMemberCreate(
+        user_id=invited_user.id,
+        project_id=project_id,
+        role=models.ProjectRole(role.value),
+    )
+    return crud.create_project_member(db, member)
 
 
 # #TODO: terminar los siguientes endpoints:
-#
-#
 # # Optional
 # @app.get("/project/{project_id}/share", tags=["Access"])
 # def share_project(project_id: int, email: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
