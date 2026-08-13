@@ -7,16 +7,20 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     POSTGRES_HOST: str
     POSTGRES_PORT: int = 5432
-    
+
     # JWT configuration variables
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    # Configuration for reading the .env file 
+    # AWS / S3 configuration variables
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
+    AWS_REGION: str = "us-east-1"
+    S3_BUCKET_NAME: str
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    # Property to construct the database URL from the individual components
     @property
     def database_url(self) -> str:
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

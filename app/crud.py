@@ -32,9 +32,11 @@ def get_projects(db: Session, user_id: int):
     # Return projects with user access
     return (
         db.query(models.Project)
+        .join(models.Document, isouter=True)
         .join(models.ProjectMember)
         .filter(models.ProjectMember.user_id == user_id)
         .all()
+        
     )
 
 def create_project(db: Session, project: schemas.ProjectCreate, owner_id: int):
@@ -75,15 +77,28 @@ def delete_project(db: Session, project_id: int):
 # ==========================================
 # PROJECT MEMBERS
 # ==========================================
-def create_project_member(db: Session, member: schemas.ProjectMemberCreate, project_id: int):
-    db_member = models.ProjectMember(**member.model_dump(), project_id=project_id)
+def create_project_member(db: Session, member: schemas.ProjectMemberCreate):
+    db_member = models.ProjectMember(**member.model_dump())
     db.add(db_member)
     db.commit()
     db.refresh(db_member)
     return db_member
 
-def get_project_members(db: Session, project_id: int):
-    return db.query(models.ProjectMember).filter(models.ProjectMember.project_id == project_id).all()
+def get_project_member(db: Session, project_id: int, user_id: int):
+    return (
+        db.query(models.ProjectMember)
+        .filter(
+            models.ProjectMember.project_id == project_id,
+            models.ProjectMember.user_id == user_id,
+        )
+        .first()
+    )
+
+def update_project_member_role(db: Session, member: models.ProjectMember, role: models.ProjectRole):
+    member.role = role
+    db.commit()
+    db.refresh(member)
+    return member
 
 def is_owner(db: Session, project_id: int, user_id: int) -> bool:
     member = (
@@ -109,6 +124,32 @@ def create_document(db: Session, document: schemas.DocumentCreate, project_id: i
 
 def get_documents_by_project(db: Session, project_id: int):
     return db.query(models.Document).filter(models.Document.project_id == project_id).all()
+
+def get_document(db: Session, document_id: int):
+    return db.query(models.Document).filter(models.Document.id == document_id).first()
+
+def get_document_membership_or_404(db: Session, document_id: int, user_id: int):
+    """Confirms the document exists and the user has access to its parent project."""
+    document = get_document(db, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    membership = get_membership_or_404(db, document.project_id, user_id)
+    return document, membership
+
+def update_document(db: Session, document_id: int, file_name: str, file_size: int):
+    db_document = get_document(db, document_id)
+    db_document.file_name = file_name
+    db_document.file_size = file_size
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+def delete_document(db: Session, document_id: int):
+    db_document = get_document(db, document_id)
+    if db_document:
+        db.delete(db_document)
+        db.commit()
+    return db_document
 
 
 # ==========================================

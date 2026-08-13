@@ -2,6 +2,8 @@ services:
   # 1. Database
   db:
     image: postgres:15
+    env_file:
+      - .env
     container_name: dashboard_db
     restart: always
     environment:

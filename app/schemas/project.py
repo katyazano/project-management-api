@@ -3,21 +3,6 @@ from pydantic import BaseModel, ConfigDict
 from app.models import ProjectRole
 
 
-# Project schemas
-
-class ProjectBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-class ProjectCreate(ProjectBase):
-    pass
-
-class ProjectResponse(ProjectBase):
-    id: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 # Project member schemas
 
 class ProjectMemberBase(BaseModel):
@@ -47,5 +32,21 @@ class DocumentResponse(DocumentBase):
     file_size: int
     s3_key: str
     project_id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Project schemas
+
+class ProjectBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class ProjectCreate(ProjectBase):
+    pass
+
+class ProjectResponse(ProjectBase):
+    id: int
+    documents: list[DocumentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

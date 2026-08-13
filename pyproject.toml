@@ -2,6 +2,7 @@
 name = "final"
 version = "0.1.0"
 description = ""
+package-mode = false
 authors = [
     {name = "katyazano",email = "katheryn.azano@gmail.com"}
 ]
@@ -9,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi (>=0.140.7,<0.141.0)",
     "uvicorn[standard] (>=0.51.0,<0.52.0)",
-    "pydantic (>=2.13.4,<3.0.0)",
+    "pydantic[email] (>=2.13.4,<3.0.0)",
     "pydantic-settings (>=2.14.2,<3.0.0)",
     "python-multipart (>=0.0.32,<0.0.33)",
     "sqlalchemy (>=2.0.51,<3.0.0)",

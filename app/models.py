@@ -9,6 +9,10 @@ class ProjectRole(enum.Enum):
     EDITOR = "editor"
     VIEWER = "viewer"
 
+class InvitableRole(enum.Enum):
+    EDITOR = "editor"
+    VIEWER = "viewer"
+
 class User(Base):
     __tablename__ = "users"
 
