@@ -1,6 +1,6 @@
 import re
 from typing import Self
-from pydantic import BaseModel, ConfigDict, model_validator, field_validator
+from pydantic import BaseModel, ConfigDict, model_validator, field_validator, EmailStr
 
 
 # User schemas
@@ -10,7 +10,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     username: str
-    email: str
+    email: EmailStr
     password: str
     repeat_password: str
 

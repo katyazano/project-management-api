@@ -123,6 +123,10 @@ def delete_project(
     if not crud.is_owner(db, project_id, current_user.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions to delete this project")
 
+    documents = crud.get_documents_by_project(db, project_id)
+    for document in documents:
+        s3.delete_file(document.s3_key)
+
     crud.delete_project(db=db, project_id=project_id)
     return None
 
@@ -167,7 +171,7 @@ def upload_document(
         contents = file.file.read()
         file_size = len(contents)
 
-        s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}"
+        s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}" # Generate a unique S3 key for each uploaded file to avoid overwriting in s3
         s3.upload_file(io.BytesIO(contents), s3_key, file.content_type)
 
         document = schemas.DocumentCreate(file_name=file.filename, file_size=file_size, s3_key=s3_key)

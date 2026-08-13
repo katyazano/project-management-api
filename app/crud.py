@@ -32,9 +32,11 @@ def get_projects(db: Session, user_id: int):
     # Return projects with user access
     return (
         db.query(models.Project)
+        .join(models.Document, isouter=True)
         .join(models.ProjectMember)
         .filter(models.ProjectMember.user_id == user_id)
         .all()
+        
     )
 
 def create_project(db: Session, project: schemas.ProjectCreate, owner_id: int):
