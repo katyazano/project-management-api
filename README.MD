@@ -131,6 +131,18 @@ Interactive Swagger docs are available once the server is running:
 | `POST` | `/project/{project_id}/invite?user={login}` | Grant another user access to a project | Yes (owner only) |
 | `GET` | `/project/{project_id}/share?with={email}` | Email a join link for the project | Yes (owner only) |
 
+## Testing with Postman
+
+A ready-to-use Postman collection is included: [`project-management-api.postman_collection.json`](./project-management-api.postman_collection.json).
+
+1. Open Postman → **Import** → select the file.
+2. Requests are grouped into **Auth**, **Projects**, **Documents**, and **Access** folders.
+3. Run **Auth → Login** first — it automatically saves the returned JWT into a collection variable, which every other request reuses via Bearer auth.
+4. **Projects → Create Project** likewise auto-saves the new `project_id` for use in later requests.
+5. For the two file-upload requests (**Upload Document**, **Update Document**), open the **Body** tab and attach a real `.pdf`/`.docx` file before sending — Postman can't pre-fill a file path for security reasons.
+
+Collection variables (`base_url`, `access_token`, `project_id`, `document_id`) can be edited from the collection's **Variables** tab if you need to point at a different host or seed a different starting ID.
+
 ## Running Tests
 
 ```bash
@@ -139,10 +151,4 @@ poetry run pytest
 
 ## Roadmap
 
-- [ ] Document upload/download/update/delete endpoints
-- [ ] Project invite and share-link endpoints
-- [ ] S3 integration for document storage
-- [ ] Lambda-based image resizing and file size limits
-- [ ] Database migrations with Alembic
-- [ ] CI/CD pipeline: lint, test, build, push, deploy on merge
-- [ ] Packaging (`pyproject.toml` / Poetry build)
+See [`CHALLENGE.md`](./CHALLENGE.md) for the full original project brief and requirements.
