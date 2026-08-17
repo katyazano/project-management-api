@@ -16,10 +16,63 @@ app = FastAPI(title="Project Management API", version="1.0.0")
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
+# ==========================================
+# SECURITY DEPENDENCIES
+# ==========================================
+
+def require_role(*allowed_roles: models.ProjectRole):
+    """
+    Returns a FastAPI dependency that confirms the current user is a member
+    of the project (via path param `project_id`) with one of the given roles.
+    Raises 404 if the project doesn't exist, 403 if the role doesn't match.
+    """
+    def dependency(
+        project_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(security.get_current_user),
+    ) -> models.ProjectMember:
+        membership = crud.get_membership_or_404(db, project_id, current_user.id)
+        if membership.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions to perform this action",
+            )
+        return membership
+
+    return dependency
+
+
+def require_document_role(*allowed_roles: models.ProjectRole):
+    """
+    Like require_role, but resolves the project via the document (path param
+    `document_id`) instead of directly from the path. Returns (document, membership).
+    """
+    def dependency(
+        document_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(security.get_current_user),
+    ):
+        document, membership = crud.get_document_membership_or_404(db, document_id, current_user.id)
+        if membership.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions to perform this action",
+            )
+        return document, membership
+
+    return dependency
+
+
+require_document_editor_or_owner = require_document_role(models.ProjectRole.OWNER, models.ProjectRole.EDITOR)
+
+
+require_owner = require_role(models.ProjectRole.OWNER)
+require_editor_or_owner = require_role(models.ProjectRole.OWNER, models.ProjectRole.EDITOR)
 
 # ==========================================
 # AUTHENTICATION ROUTES
 # ==========================================
+
 @app.get("/", status_code=status.HTTP_200_OK)
 def root():
     return {"message": "API is running successfully"}
@@ -128,41 +181,18 @@ def update_project(
     project_id: int,
     project: schemas.ProjectCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user),
+    membership: models.ProjectMember = Depends(require_editor_or_owner),
 ):
     """Update information about a specific project."""
-    membership = crud.get_membership_or_404(db, project_id, current_user.id)
-
-    if membership.role == models.ProjectRole.VIEWER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Viewers cannot edit this project",
-        )
-
     return crud.update_project(db=db, project_id=project_id, project=project)
 
 
-@app.delete(
-    "/project/{project_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Projects"]
-)
+@app.delete("/project/{project_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Projects"])
 def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user),
+    membership: models.ProjectMember = Depends(require_owner),
 ):
-    """Delete a specific project (owner only)."""
-    db_project = crud.get_project(db, project_id=project_id)
-    if db_project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
-        )
-
-    if not crud.is_owner(db, project_id, current_user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete this project",
-        )
-
     documents = crud.get_documents_by_project(db, project_id)
     for document in documents:
         s3.delete_file(document.s3_key)
@@ -200,14 +230,10 @@ def upload_document(
     project_id: int,
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user),
+    document_and_membership: tuple = Depends(require_document_editor_or_owner),
 ):
     """Upload one or more documents to a specific project (owner and editor only)."""
-    membership = crud.get_membership_or_404(db, project_id, current_user.id)
-    if membership.role == models.ProjectRole.VIEWER:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="Viewers cannot upload documents"
-        )
+    document, membership = document_and_membership
 
     created_documents = []
     for file in files:
@@ -255,65 +281,44 @@ def download_document(
 
 
 @app.put(
-    "/document/{document_id}",
-    status_code=status.HTTP_200_OK,
-    response_model=schemas.DocumentResponse,
-    tags=["Documents"],
-)
+        "/document/{document_id}",
+        status_code=status.HTTP_200_OK,
+        response_model=schemas.DocumentResponse,
+        tags=["Documents"])
 def update_document(
     document_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user),
+    document_and_membership: tuple = Depends(require_document_editor_or_owner),
 ):
     """Update an existing document (owner and editor only).
     This will overwrite the existing file in S3 and update the metadata in the database."""
-    document, membership = crud.get_document_membership_or_404(
-        db, document_id, current_user.id
-    )
-    if membership.role == models.ProjectRole.VIEWER:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="Viewers cannot update documents"
-        )
+    document, membership = document_and_membership
 
-    extension = (
-        "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    )
+    extension = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, detail="Only .pdf and .docx are allowed."
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Only .pdf & .docx are allowed.")
 
     contents = file.file.read()
     file_size = len(contents)
 
-    s3.upload_file(
-        io.BytesIO(contents), document.s3_key, file.content_type
-    )  # overwrite same S3 key
+    s3.upload_file(io.BytesIO(contents), document.s3_key, file.content_type)
 
-    return crud.update_document(
-        db, document_id, file_name=file.filename, file_size=file_size
-    )
+    return crud.update_document(db, document_id, file_name=file.filename, file_size=file_size)
+
 
 
 @app.delete(
-    "/document/{document_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    tags=["Documents"],
-)
+        "/document/{document_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        tags=["Documents"])
 def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user),
+    document_and_membership: tuple = Depends(require_document_editor_or_owner),
 ):
     """Delete a specific document (owner and editor only)."""
-    document, membership = crud.get_document_membership_or_404(
-        db, document_id, current_user.id
-    )
-    if membership.role == models.ProjectRole.VIEWER:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="Viewers cannot delete documents"
-        )
+    document, membership = document_and_membership
 
     s3.delete_file(document.s3_key)
     crud.delete_document(db, document_id)
