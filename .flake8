@@ -1,5 +1,5 @@
 [flake8]
-max-line-length = 150
+max-line-length = 100
 extend-ignore = E203
 per-file-ignores =
     __init__.py: F401
@@ -10,4 +10,6 @@ exclude =
     dist,
     .venv,
     venv,
-    .mypy_cache,    
+    .mypy_cache,
+    config.py,
+    conftest.py,
