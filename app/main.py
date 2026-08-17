@@ -1,16 +1,16 @@
 import io
-import uuid
-from datetime import timedelta
 from typing import List
+import uuid
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from datetime import timedelta
 
-from . import crud, models, s3, schemas, security
-from .config import settings
+from . import crud, models, schemas, security, s3
 from .database import get_db
+from .config import settings
 
 app = FastAPI(title="Project Management API", version="1.0.0")
 
@@ -29,7 +29,7 @@ def root():
     "/auth", status_code=status.HTTP_201_CREATED, response_model=schemas.UserResponse
 )
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    """Create a new user in the database after checking if the username is already registered and hashing the password."""
+    """Create a new user in the database."""
     db_user = crud.get_user_by_username(db, username=user.username)
 
     # Check if the username is already registered
@@ -114,7 +114,8 @@ def get_project(
     current_user: models.User = Depends(security.get_current_user),
 ):
     """Retrieve information about a specific project."""
-    return crud.get_project(db, project_id=project_id, user_id=current_user.id)
+    crud.get_membership_or_404(db, project_id, current_user.id)
+    return crud.get_project(db, project_id=project_id)
 
 
 @app.put(
@@ -218,13 +219,14 @@ def upload_document(
         if extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=f"File '{file.filename}' has an unsupported type. Only .pdf and .docx are allowed.",
+                detail=f"File '{file.filename}' has an unsupported type. Only .pdf & .docx allowed",
             )
 
         contents = file.file.read()
         file_size = len(contents)
 
-        s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}"  # Generate a unique S3 key for each uploaded file to avoid overwriting in s3
+        # Generate a unique S3 key for each uploaded file to avoid overwriting in s3
+        s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}"
         s3.upload_file(io.BytesIO(contents), s3_key, file.content_type)
 
         document = schemas.DocumentCreate(
@@ -264,7 +266,8 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user),
 ):
-    """Update an existing document (owner and editor only). This will overwrite the existing file in S3 and update the metadata in the database."""
+    """Update an existing document (owner and editor only).
+    This will overwrite the existing file in S3 and update the metadata in the database."""
     document, membership = crud.get_document_membership_or_404(
         db, document_id, current_user.id
     )
@@ -370,7 +373,7 @@ def invite_user(
 # #TODO: terminar los siguientes endpoints:
 # # Optional
 # @app.get("/project/{project_id}/share", tags=["Access"])
-# def share_project(project_id: int, email: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+# def share_project(project_id: int, email: str,
+#   db: Session =Depends(get_db), current_user = Depends(get_current_user)):
 #     """Send a GET /join link with correct hashed token to specified email."""
-#     # Igual aquí, 'email: str' se convierte en el query parameter '?with=email' (podemos renombrar la variable a 'with_email' y mapearla)
 #     pass
