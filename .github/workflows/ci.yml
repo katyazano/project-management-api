@@ -52,7 +52,7 @@ jobs:
         run: poetry install --no-interaction --no-root
  
       - name: Lint (flake8)
-        run: poetry run flake8 . --max-line-length=100 --extend-ignore=E203
+        run: poetry run flake8
  
       - name: Run tests
         env:

@@ -3,3 +3,11 @@ max-line-length = 150
 extend-ignore = E203
 per-file-ignores =
     __init__.py: F401
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    .venv,
+    venv,
+    .mypy_cache,    
