@@ -12,9 +12,6 @@ from . import crud, models, schemas, security, s3
 from .database import engine, get_db
 from .config import settings
 
-# SQLAlchemy creates the database tables based on the models defined in models.py
-models.Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="Project Management API", version="1.0.0")
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
@@ -101,7 +98,7 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user)
 ):
-    """Update information about a specific project (owner only)."""
+    """Update information about a specific project."""
     membership = crud.get_membership_or_404(db, project_id, current_user.id)
 
     if membership.role == models.ProjectRole.VIEWER:

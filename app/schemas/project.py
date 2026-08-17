@@ -40,8 +40,7 @@ class DocumentResponse(DocumentBase):
 
 class ProjectBase(BaseModel):
     name: str
-    description: Optional[str] = None
-
+    description: Optional[str]
 class ProjectCreate(ProjectBase):
     pass
 
