@@ -6,7 +6,7 @@ package-mode = false
 authors = [
     {name = "katyazano",email = "katheryn.azano@gmail.com"}
 ]
-package-mode = falsed
+package-mode = false
 requires-python = ">=3.12"
 dependencies = [
     "fastapi (>=0.140.7,<0.141.0)",
