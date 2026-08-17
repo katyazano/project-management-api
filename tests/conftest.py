@@ -1,5 +1,16 @@
 import os
 
+import boto3
+import pytest
+from fastapi.testclient import TestClient
+from moto import mock_aws
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.database import Base, get_db
+from app.main import app
+
 os.environ.setdefault("POSTGRES_USER", "test")
 os.environ.setdefault("POSTGRES_PASSWORD", "test")
 os.environ.setdefault("POSTGRES_DB", "test")
@@ -14,16 +25,6 @@ os.environ.setdefault("S3_BUCKET_NAME", "test-bucket")
 os.environ.setdefault("AWS_SECURITY_TOKEN", "testing")
 os.environ.setdefault("AWS_SESSION_TOKEN", "testing")
 
-import pytest
-import boto3
-from moto import mock_aws
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from fastapi.testclient import TestClient
-
-from app.main import app
-from app.database import Base, get_db
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
@@ -37,6 +38,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 # ==========================================
 # DATABASE & CLIENT FIXTURES
 # ==========================================
+
 
 @pytest.fixture(scope="function")
 def db_session():
@@ -53,6 +55,7 @@ def db_session():
 @pytest.fixture(scope="function")
 def client(db_session):
     """TestClient wired to the in-memory DB instead of real Postgres."""
+
     def override_get_db():
         yield db_session
 
@@ -61,9 +64,11 @@ def client(db_session):
         yield test_client
     app.dependency_overrides.clear()
 
+
 # ==========================================
 # AWS MOCK FIXTURE
 # ==========================================
+
 
 @pytest.fixture(scope="function")
 def mock_s3():
@@ -74,12 +79,14 @@ def mock_s3():
     with mock_aws():
         s3_client = boto3.client("s3", region_name=os.environ["AWS_REGION"])
         s3_client.create_bucket(Bucket=os.environ["S3_BUCKET_NAME"])
-        
+
         yield s3_client
+
 
 # ==========================================
 # AUTHENTICATION FIXTURES
 # ==========================================
+
 
 @pytest.fixture
 def user_payload():
@@ -97,10 +104,14 @@ def auth_headers(client, user_payload):
     client.post("/auth", json=user_payload)
     response = client.post(
         "/login",
-        data={"username": user_payload["username"], "password": user_payload["password"]},
+        data={
+            "username": user_payload["username"],
+            "password": user_payload["password"],
+        },
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
 
 @pytest.fixture
 def second_user_payload():
@@ -121,11 +132,14 @@ def second_username(client, second_user_payload):
 
 @pytest.fixture
 def second_user_headers(client, second_user_payload):
-    """Registers a second user, logs in, and returns ready-to-use auth headers."""
+    """Registers a second user, logs in, and returns auth headers."""
     client.post("/auth", json=second_user_payload)
     response = client.post(
         "/login",
-        data={"username": second_user_payload["username"], "password": second_user_payload["password"]},
+        data={
+            "username": second_user_payload["username"],
+            "password": second_user_payload["password"],
+        },
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

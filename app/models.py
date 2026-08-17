@@ -1,6 +1,8 @@
 import enum
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum
+
+from sqlalchemy import Column, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
+
 from .database import Base
 
 
@@ -9,9 +11,11 @@ class ProjectRole(enum.Enum):
     EDITOR = "editor"
     VIEWER = "viewer"
 
+
 class InvitableRole(enum.Enum):
     EDITOR = "editor"
     VIEWER = "viewer"
+
 
 class User(Base):
     __tablename__ = "users"
@@ -21,6 +25,7 @@ class User(Base):
     hashed_password = Column(String)
     email = Column(String, unique=True, index=True)
 
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -28,8 +33,13 @@ class Project(Base):
     name = Column(String, index=True)
     description = Column(String)
 
-    members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
-    documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
+    members = relationship(
+        "ProjectMember", back_populates="project", cascade="all, delete-orphan"
+    )
+    documents = relationship(
+        "Document", back_populates="project", cascade="all, delete-orphan"
+    )
+
 
 class ProjectMember(Base):
     __tablename__ = "project_members"
@@ -38,7 +48,8 @@ class ProjectMember(Base):
     role = Column(Enum(ProjectRole), default=ProjectRole.VIEWER, nullable=False)
 
     project = relationship("Project", back_populates="members")
-    user = relationship("User") 
+    user = relationship("User")
+
 
 class Document(Base):
     __tablename__ = "documents"

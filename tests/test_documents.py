@@ -1,25 +1,29 @@
 def create_project(client, headers, name="Doc Test Project"):
     """Helper function to create a project for testing."""
-    response = client.post("/projects", json={"name": name, "description": "for doc tests"}, headers=headers)
+    response = client.post(
+        "/projects",
+        json={"name": name, "description": "for doc tests"},
+        headers=headers,
+    )
     return response.json()["id"]
 
 
 def test_upload_document_success(mock_s3, client, auth_headers):
     project_id = create_project(client, auth_headers)
     file_content = b"%PDF-1.4 fake pdf content"
-    
+
     response = client.post(
         f"/project/{project_id}/documents",
         files=[("files", ("test.pdf", file_content, "application/pdf"))],
         headers=auth_headers,
     )
-    
+
     assert response.status_code == 201
     data = response.json()
     assert len(data) == 1
     assert data[0]["file_name"] == "test.pdf"
     assert data[0]["file_size"] == len(file_content)
-    
+
     objects = mock_s3.list_objects_v2(Bucket="test-bucket")
     assert "Contents" in objects
     assert len(objects["Contents"]) == 1
@@ -32,21 +36,23 @@ def test_upload_document_rejects_bad_extension(mock_s3, client, auth_headers):
         files=[("files", ("test.exe", b"data", "application/octet-stream"))],
         headers=auth_headers,
     )
-    
+
     assert response.status_code == 400
-    
+
     objects = mock_s3.list_objects_v2(Bucket="test-bucket")
     assert "Contents" not in objects
 
 
-def test_upload_document_requires_membership(mock_s3, client, auth_headers, second_user_headers):
+def test_upload_document_requires_membership(
+    mock_s3, client, auth_headers, second_user_headers
+):
     project_id = create_project(client, auth_headers)
     response = client.post(
         f"/project/{project_id}/documents",
         files=[("files", ("test.pdf", b"content", "application/pdf"))],
         headers=second_user_headers,
     )
-    
+
     assert response.status_code == 403
 
 
@@ -57,7 +63,7 @@ def test_get_project_documents(mock_s3, client, auth_headers):
         files=[("files", ("test.pdf", b"content", "application/pdf"))],
         headers=auth_headers,
     )
-    
+
     response = client.get(f"/project/{project_id}/documents", headers=auth_headers)
     assert response.status_code == 200
     assert len(response.json()) == 1
@@ -72,8 +78,10 @@ def test_download_document_redirects_to_s3(mock_s3, client, auth_headers):
     )
     document_id = upload.json()[0]["id"]
 
-    response = client.get(f"/document/{document_id}", headers=auth_headers, follow_redirects=False)
-    
+    response = client.get(
+        f"/document/{document_id}", headers=auth_headers, follow_redirects=False
+    )
+
     assert response.status_code == 307
     assert "test-bucket.s3.amazonaws.com" in response.headers["location"]
     assert "AWSAccessKeyId" in response.headers["location"]
@@ -99,7 +107,7 @@ def test_update_document(mock_s3, client, auth_headers):
         files={"file": ("updated.pdf", new_content, "application/pdf")},
         headers=auth_headers,
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["file_name"] == "updated.pdf"
@@ -122,12 +130,14 @@ def test_delete_document(mock_s3, client, auth_headers):
 
     remaining = client.get(f"/project/{project_id}/documents", headers=auth_headers)
     assert remaining.json() == []
-    
+
     objects_after_delete = mock_s3.list_objects_v2(Bucket="test-bucket")
     assert "Contents" not in objects_after_delete
 
 
-def test_viewer_cannot_delete_document(mock_s3, client, auth_headers, second_user_headers, second_username):
+def test_viewer_cannot_delete_document(
+    mock_s3, client, auth_headers, second_user_headers, second_username
+):
     project_id = create_project(client, auth_headers)
     upload = client.post(
         f"/project/{project_id}/documents",
@@ -136,9 +146,12 @@ def test_viewer_cannot_delete_document(mock_s3, client, auth_headers, second_use
     )
     document_id = upload.json()[0]["id"]
 
-    client.post(f"/project/{project_id}/invite?user={second_username}&role=viewer", headers=auth_headers)
+    client.post(
+        f"/project/{project_id}/invite?user={second_username}&role=viewer",
+        headers=auth_headers,
+    )
 
     response = client.delete(f"/document/{document_id}", headers=second_user_headers)
     assert response.status_code == 403
-    
+
     assert len(mock_s3.list_objects_v2(Bucket="test-bucket")["Contents"]) == 1

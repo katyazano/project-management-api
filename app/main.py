@@ -1,29 +1,33 @@
 import io
-from typing import List
 import uuid
-
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
 from datetime import timedelta
+from typing import List
 
-from . import crud, models, schemas, security, s3
-from .database import engine, get_db
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi.responses import RedirectResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+
+from . import crud, models, s3, schemas, security
 from .config import settings
+from .database import get_db
 
 app = FastAPI(title="Project Management API", version="1.0.0")
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
+
 # ==========================================
-# AUTHENTICATION ROUTES 
+# AUTHENTICATION ROUTES
 # ==========================================
 @app.get("/", status_code=status.HTTP_200_OK)
 def root():
     return {"message": "API is running successfully"}
 
-@app.post("/auth", status_code=status.HTTP_201_CREATED, response_model=schemas.UserResponse)
+
+@app.post(
+    "/auth", status_code=status.HTTP_201_CREATED, response_model=schemas.UserResponse
+)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     """Create a new user in the database after checking if the username is already registered and hashing the password."""
     db_user = crud.get_user_by_username(db, username=user.username)
@@ -31,22 +35,27 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     # Check if the username is already registered
     if db_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="Username already registered"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered",
         )
-    
+
     # Hash the password before storing it
     hashed_password = security.get_password_hash(user.password)
 
     return crud.create_user(db=db, user=user, hashed_password=hashed_password)
 
+
 @app.post("/login", response_model=schemas.Token, status_code=status.HTTP_200_OK)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+):
     """Authenticate the user and return a JWT token if the credentials are valid."""
     user = crud.get_user_by_username(db, username=form_data.username)
 
     # Verify the provided password against the hashed password stored in the database
-    if not user or not security.verify_password(form_data.password, user.hashed_password):
+    if not user or not security.verify_password(
+        form_data.password, user.hashed_password
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -56,69 +65,102 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     # Generate JWT token for the authenticated user
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
-        data={"sub": user.username}, 
-        expires_delta=access_token_expires
+        data={"sub": user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+
 # ==========================================
-# PROJECT ROUTES 
+# PROJECT ROUTES
 # ==========================================
-@app.post("/projects", status_code=status.HTTP_201_CREATED, response_model=schemas.ProjectResponse, tags=["Projects"])
+@app.post(
+    "/projects",
+    status_code=status.HTTP_201_CREATED,
+    response_model=schemas.ProjectResponse,
+    tags=["Projects"],
+)
 def create_project(
-    project: schemas.ProjectCreate, 
+    project: schemas.ProjectCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Create a new project for the authenticated user."""
     return crud.create_project(db=db, project=project, owner_id=current_user.id)
 
-@app.get("/projects", status_code=status.HTTP_200_OK, response_model=list[schemas.ProjectResponse], tags=["Projects"])
+
+@app.get(
+    "/projects",
+    status_code=status.HTTP_200_OK,
+    response_model=list[schemas.ProjectResponse],
+    tags=["Projects"],
+)
 def get_projects(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Retrieve all projects that the authenticated user is a member of."""
     return crud.get_projects(db=db, user_id=current_user.id)
 
-@app.get("/project/{project_id}/info", status_code=status.HTTP_200_OK, response_model=schemas.ProjectResponse, tags=["Projects"])
+
+@app.get(
+    "/project/{project_id}/info",
+    status_code=status.HTTP_200_OK,
+    response_model=schemas.ProjectResponse,
+    tags=["Projects"],
+)
 def get_project(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Retrieve information about a specific project."""
-    membership = crud.get_membership_or_404(db, project_id, current_user.id)
-    return crud.get_project(db, project_id=project_id)
+    return crud.get_project(db, project_id=project_id, user_id=current_user.id)
 
-@app.put("/project/{project_id}/info", status_code=status.HTTP_200_OK, response_model=schemas.ProjectResponse, tags=["Projects"])
+
+@app.put(
+    "/project/{project_id}/info",
+    status_code=status.HTTP_200_OK,
+    response_model=schemas.ProjectResponse,
+    tags=["Projects"],
+)
 def update_project(
     project_id: int,
     project: schemas.ProjectCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Update information about a specific project."""
     membership = crud.get_membership_or_404(db, project_id, current_user.id)
 
     if membership.role == models.ProjectRole.VIEWER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Viewers cannot edit this project")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Viewers cannot edit this project",
+        )
 
     return crud.update_project(db=db, project_id=project_id, project=project)
 
-@app.delete("/project/{project_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Projects"])
+
+@app.delete(
+    "/project/{project_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Projects"]
+)
 def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Delete a specific project (owner only)."""
     db_project = crud.get_project(db, project_id=project_id)
     if db_project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+        )
 
     if not crud.is_owner(db, project_id, current_user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions to delete this project")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to delete this project",
+        )
 
     documents = crud.get_documents_by_project(db, project_id)
     for document in documents:
@@ -128,53 +170,72 @@ def delete_project(
     return None
 
 
-
-
-
 # ==========================================
 # PROJECT DOCUMENTS (Upload & List)
 # ==========================================
-@app.get("/project/{project_id}/documents", status_code=status.HTTP_200_OK, response_model=list[schemas.DocumentResponse], tags=["Documents"])
+@app.get(
+    "/project/{project_id}/documents",
+    status_code=status.HTTP_200_OK,
+    response_model=list[schemas.DocumentResponse],
+    tags=["Documents"],
+)
 def get_project_documents(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Retrieve all documents associated with a specific project."""
     crud.get_membership_or_404(db, project_id, current_user.id)
     return crud.get_documents_by_project(db, project_id=project_id)
 
-@app.post("/project/{project_id}/documents", status_code=status.HTTP_201_CREATED, response_model=list[schemas.DocumentResponse], tags=["Documents"])
+
+@app.post(
+    "/project/{project_id}/documents",
+    status_code=status.HTTP_201_CREATED,
+    response_model=list[schemas.DocumentResponse],
+    tags=["Documents"],
+)
 def upload_document(
     project_id: int,
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Upload one or more documents to a specific project (owner and editor only)."""
     membership = crud.get_membership_or_404(db, project_id, current_user.id)
     if membership.role == models.ProjectRole.VIEWER:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Viewers cannot upload documents")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Viewers cannot upload documents"
+        )
 
     created_documents = []
     for file in files:
-        extension = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+        extension = (
+            "." + file.filename.rsplit(".", 1)[-1].lower()
+            if "." in file.filename
+            else ""
+        )
         if extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=f"File '{file.filename}' has an unsupported type. Only .pdf and .docx are allowed."
+                detail=f"File '{file.filename}' has an unsupported type. Only .pdf and .docx are allowed.",
             )
 
         contents = file.file.read()
         file_size = len(contents)
 
-        s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}" # Generate a unique S3 key for each uploaded file to avoid overwriting in s3
+        s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}"  # Generate a unique S3 key for each uploaded file to avoid overwriting in s3
         s3.upload_file(io.BytesIO(contents), s3_key, file.content_type)
 
-        document = schemas.DocumentCreate(file_name=file.filename, file_size=file_size, s3_key=s3_key)
-        created_documents.append(crud.create_document(db=db, document=document, project_id=project_id))
+        document = schemas.DocumentCreate(
+            file_name=file.filename, file_size=file_size, s3_key=s3_key
+        )
+        created_documents.append(
+            crud.create_document(db=db, document=document, project_id=project_id)
+        )
 
     return created_documents
+
 
 # ==========================================
 # INDIVIDUAL DOCUMENTS (Download, Update, Delete)
@@ -183,7 +244,7 @@ def upload_document(
 def download_document(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Download document, if the user has access to the corresponding project"""
     document, _ = crud.get_document_membership_or_404(db, document_id, current_user.id)
@@ -191,55 +252,86 @@ def download_document(
     return RedirectResponse(url)
 
 
-@app.put("/document/{document_id}", status_code=status.HTTP_200_OK, response_model=schemas.DocumentResponse, tags=["Documents"])
+@app.put(
+    "/document/{document_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=schemas.DocumentResponse,
+    tags=["Documents"],
+)
 def update_document(
     document_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Update an existing document (owner and editor only). This will overwrite the existing file in S3 and update the metadata in the database."""
-    document, membership = crud.get_document_membership_or_404(db, document_id, current_user.id)
+    document, membership = crud.get_document_membership_or_404(
+        db, document_id, current_user.id
+    )
     if membership.role == models.ProjectRole.VIEWER:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Viewers cannot update documents")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Viewers cannot update documents"
+        )
 
-    extension = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    extension = (
+        "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    )
     if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Only .pdf and .docx are allowed.")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail="Only .pdf and .docx are allowed."
+        )
 
     contents = file.file.read()
     file_size = len(contents)
 
-    s3.upload_file(io.BytesIO(contents), document.s3_key, file.content_type)  # overwrite same S3 key
+    s3.upload_file(
+        io.BytesIO(contents), document.s3_key, file.content_type
+    )  # overwrite same S3 key
 
-    return crud.update_document(db, document_id, file_name=file.filename, file_size=file_size)
+    return crud.update_document(
+        db, document_id, file_name=file.filename, file_size=file_size
+    )
 
 
-@app.delete("/document/{document_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Documents"])
+@app.delete(
+    "/document/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Documents"],
+)
 def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Delete a specific document (owner and editor only)."""
-    document, membership = crud.get_document_membership_or_404(db, document_id, current_user.id)
+    document, membership = crud.get_document_membership_or_404(
+        db, document_id, current_user.id
+    )
     if membership.role == models.ProjectRole.VIEWER:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Viewers cannot delete documents")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Viewers cannot delete documents"
+        )
 
     s3.delete_file(document.s3_key)
     crud.delete_document(db, document_id)
     return None
 
+
 # ==========================================
 # ACCESS & INVITATIONS
 # ==========================================
-@app.post("/project/{project_id}/invite", status_code=status.HTTP_200_OK, response_model=schemas.ProjectMemberResponse, tags=["Access"])
+@app.post(
+    "/project/{project_id}/invite",
+    status_code=status.HTTP_200_OK,
+    response_model=schemas.ProjectMemberResponse,
+    tags=["Access"],
+)
 def invite_user(
     project_id: int,
     user: str,
     role: models.InvitableRole = models.InvitableRole.EDITOR,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user)
+    current_user: models.User = Depends(security.get_current_user),
 ):
     """Invite a user to a project (owner only)."""
     # Confirm the project exists and the requester is a member
@@ -247,7 +339,9 @@ def invite_user(
 
     # Only the owner can invite
     if membership.role != models.ProjectRole.OWNER:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only the project owner can invite users")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Only the project owner can invite users"
+        )
 
     # Find the user being invited
     invited_user = crud.get_user_by_username(db, username=user)
@@ -260,7 +354,9 @@ def invite_user(
     if existing_member is not None:
         # Already a member — treat this as a role change instead of rejecting
         if existing_member.role == models.ProjectRole.OWNER:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cannot change the owner's role")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, detail="Cannot change the owner's role"
+            )
         return crud.update_project_member_role(db, existing_member, new_role)
 
     member = schemas.ProjectMemberCreate(
