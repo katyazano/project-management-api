@@ -20,6 +20,7 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 # SECURITY DEPENDENCIES
 # ==========================================
 
+
 def require_role(*allowed_roles: models.ProjectRole):
     """
     Returns a FastAPI dependency that confirms the current user is a member
@@ -63,7 +64,8 @@ def require_document_role(*allowed_roles: models.ProjectRole):
     return dependency
 
 
-require_document_editor_or_owner = require_document_role(models.ProjectRole.OWNER, models.ProjectRole.EDITOR)
+require_document_editor_or_owner = require_document_role(
+    models.ProjectRole.OWNER, models.ProjectRole.EDITOR)
 
 
 require_owner = require_role(models.ProjectRole.OWNER)
@@ -72,6 +74,7 @@ require_editor_or_owner = require_role(models.ProjectRole.OWNER, models.ProjectR
 # ==========================================
 # AUTHENTICATION ROUTES
 # ==========================================
+
 
 @app.get("/", status_code=status.HTTP_200_OK)
 def root():
@@ -301,7 +304,6 @@ def update_document(
     s3.upload_file(io.BytesIO(contents), document.s3_key, file.content_type)
 
     return crud.update_document(db, document_id, file_name=file.filename, file_size=file_size)
-
 
 
 @app.delete(
