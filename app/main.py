@@ -213,10 +213,9 @@ def delete_project(
 def get_project_documents(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(security.get_current_user),
+    membership: models.ProjectMember = Depends(require_editor_or_owner)
 ):
     """Retrieve all documents associated with a specific project."""
-    crud.get_membership_or_404(db, project_id, current_user.id)
     return crud.get_documents_by_project(db, project_id=project_id)
 
 
@@ -230,11 +229,9 @@ def upload_document(
     project_id: int,
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    document_and_membership: tuple = Depends(require_document_editor_or_owner),
+    membership: models.ProjectMember = Depends(require_editor_or_owner)
 ):
     """Upload one or more documents to a specific project (owner and editor only)."""
-    document, membership = document_and_membership
-
     created_documents = []
     for file in files:
         extension = (
@@ -251,7 +248,6 @@ def upload_document(
         contents = file.file.read()
         file_size = len(contents)
 
-        # Generate a unique S3 key for each uploaded file to avoid overwriting in s3
         s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}"
         s3.upload_file(io.BytesIO(contents), s3_key, file.content_type)
 
