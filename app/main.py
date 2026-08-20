@@ -1,6 +1,6 @@
 from fastapi import FastAPI, status
 
-from app.routes import access, auth, documents, projects
+from app.routers import access, auth, documents, projects
 
 app = FastAPI(title="Project Management API", version="1.0.0")
 
