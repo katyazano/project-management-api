@@ -35,8 +35,8 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-COPY ./app ./app
-COPY ./scripts ./scripts
+# Copy your app code and alembic.ini into the container
+COPY . .
 
 # Run as a non-root user — good practice, some CI/security scanners flag
 # containers that run as root by default
