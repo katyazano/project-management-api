@@ -4,7 +4,11 @@ from app import security
 
 
 def create_project(client, headers, name="Share Test Project"):
-    response = client.post("/projects", json={"name": name, "description": "for share tests"}, headers=headers)
+    response = client.post(
+        "/projects",
+        json={"name": name, "description": "for share tests"},
+        headers=headers,
+    )
     return response.json()["id"]
 
 
@@ -12,7 +16,8 @@ def create_project(client, headers, name="Share Test Project"):
 def test_share_requires_owner(mock_send, client, auth_headers, second_user_headers):
     project_id = create_project(client, auth_headers)
     response = client.get(
-        f"/project/{project_id}/share?with=someone@example.com", headers=second_user_headers
+        f"/project/{project_id}/share?with=someone@example.com",
+        headers=second_user_headers,
     )
     assert response.status_code == 403
     mock_send.assert_not_called()
@@ -35,7 +40,9 @@ def test_share_returns_join_link(mock_send, client, auth_headers):
 @patch("app.email.send_share_invite_email")
 def test_share_sends_to_correct_email_and_project(mock_send, client, auth_headers):
     project_id = create_project(client, auth_headers, name="Specific Project Name")
-    client.get(f"/project/{project_id}/share?with=invitee@example.com", headers=auth_headers)
+    client.get(
+        f"/project/{project_id}/share?with=invitee@example.com", headers=auth_headers
+    )
 
     mock_send.assert_called_once()
     call_kwargs = mock_send.call_args.kwargs
@@ -46,7 +53,9 @@ def test_share_sends_to_correct_email_and_project(mock_send, client, auth_header
 
 @patch("app.email.send_share_invite_email")
 def test_share_nonexistent_project(mock_send, client, auth_headers):
-    response = client.get("/project/999/share?with=invitee@example.com", headers=auth_headers)
+    response = client.get(
+        "/project/999/share?with=invitee@example.com", headers=auth_headers
+    )
     assert response.status_code == 404
     mock_send.assert_not_called()
 
@@ -62,10 +71,13 @@ def test_join_requires_auth(client):
 
 
 @patch("app.email.send_share_invite_email")
-def test_join_success(mock_send, client, auth_headers, second_user_headers, second_user_payload):
+def test_join_success(
+    mock_send, client, auth_headers, second_user_headers, second_user_payload
+):
     project_id = create_project(client, auth_headers)
     share_response = client.get(
-        f"/project/{project_id}/share?with={second_user_payload['email']}", headers=auth_headers
+        f"/project/{project_id}/share?with={second_user_payload['email']}",
+        headers=auth_headers,
     )
     token = share_response.json()["join_link"].split("token=")[1]
 
@@ -74,16 +86,21 @@ def test_join_success(mock_send, client, auth_headers, second_user_headers, seco
     assert response.json()["role"] == "editor"
 
     # Confirm they actually gained access
-    project_check = client.get(f"/project/{project_id}/info", headers=second_user_headers)
+    project_check = client.get(
+        f"/project/{project_id}/info", headers=second_user_headers
+    )
     assert project_check.status_code == 200
 
 
 @patch("app.email.send_share_invite_email")
-def test_join_rejects_mismatched_email(mock_send, client, auth_headers, second_user_headers):
+def test_join_rejects_mismatched_email(
+    mock_send, client, auth_headers, second_user_headers
+):
     project_id = create_project(client, auth_headers)
     # Share link issued for a DIFFERENT email than second_user's own
     share_response = client.get(
-        f"/project/{project_id}/share?with=not-second-user@example.com", headers=auth_headers
+        f"/project/{project_id}/share?with=not-second-user@example.com",
+        headers=auth_headers,
     )
     token = share_response.json()["join_link"].split("token=")[1]
 
@@ -92,10 +109,13 @@ def test_join_rejects_mismatched_email(mock_send, client, auth_headers, second_u
 
 
 @patch("app.email.send_share_invite_email")
-def test_join_is_idempotent_for_existing_member(mock_send, client, auth_headers, second_user_headers, second_user_payload):
+def test_join_is_idempotent_for_existing_member(
+    mock_send, client, auth_headers, second_user_headers, second_user_payload
+):
     project_id = create_project(client, auth_headers)
     share_response = client.get(
-        f"/project/{project_id}/share?with={second_user_payload['email']}", headers=auth_headers
+        f"/project/{project_id}/share?with={second_user_payload['email']}",
+        headers=auth_headers,
     )
     token = share_response.json()["join_link"].split("token=")[1]
 
@@ -107,9 +127,12 @@ def test_join_is_idempotent_for_existing_member(mock_send, client, auth_headers,
     assert second_join.status_code == 200
 
 
-def test_join_expired_token(client, auth_headers, second_user_headers, second_user_payload):
+def test_join_expired_token(
+    client, auth_headers, second_user_headers, second_user_payload
+):
     # Build an already-expired token directly, bypassing the /share endpoint's 48h default
     from datetime import timedelta
+
     expired_token = security.create_share_token(
         project_id=1,
         email=second_user_payload["email"],

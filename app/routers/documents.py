@@ -7,9 +7,12 @@ from sqlalchemy.orm import Session
 
 from app import crud, models, s3, schemas
 from app.database import get_db
-from app.dependencies import (require_document_editor_or_owner,
-                              require_document_member, require_editor_or_owner,
-                              require_member)
+from app.dependencies import (
+    require_document_editor_or_owner,
+    require_document_member,
+    require_editor_or_owner,
+    require_member,
+)
 
 router = APIRouter(tags=["Documents"])
 
@@ -53,7 +56,7 @@ def upload_document(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 f"File '{file.filename}' has an unsupported type. "
-                "Only .pdf and .docx are allowed."
+                "Only .pdf and .docx are allowed.",
             )
         contents = file.file.read()
         file_size = len(contents)

@@ -54,9 +54,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 def create_share_token(
-        project_id: int,
-        email: str,
-        expires_delta: timedelta = timedelta(hours=48)) -> str:
+    project_id: int, email: str, expires_delta: timedelta = timedelta(hours=48)
+) -> str:
     """Creates a signed, time-limited token for sharing project access via email."""
     expire = datetime.now(timezone.utc) + expires_delta
     to_encode = {
@@ -66,6 +65,7 @@ def create_share_token(
         "exp": expire,
     }
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
 
 # ==========================================
 # DECODE TOKEN AND GET CURRENT USER
@@ -116,7 +116,9 @@ def decode_share_token(token: str) -> dict:
         detail="Invalid or expired share link",
     )
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
     except InvalidTokenError:
         raise credentials_exception
 

@@ -1,8 +1,7 @@
 import re
 from typing import Self
 
-from pydantic import (BaseModel, ConfigDict, EmailStr, field_validator,
-                      model_validator)
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, model_validator
 
 # User schemas
 

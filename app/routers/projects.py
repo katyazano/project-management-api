@@ -3,8 +3,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, models, s3, schemas, security
 from app.database import get_db
-from app.dependencies import (require_editor_or_owner, require_member,
-                              require_owner)
+from app.dependencies import require_editor_or_owner, require_member, require_owner
 
 router = APIRouter(tags=["Projects"])
 

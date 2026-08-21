@@ -1,17 +1,17 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app import crud, models, schemas, security
+from app import crud, email, models, schemas, security
+from app.config import settings
 from app.database import get_db
 from app.dependencies import require_owner
-from app.config import settings
-from app import email
 
 router = APIRouter(tags=["Access"])
 
 SHARE_LINK_EXPIRE_HOURS = 48
+
 
 @router.post(
     "/project/{project_id}/invite",
@@ -45,7 +45,12 @@ def invite_user(
     )
     return crud.create_project_member(db, member)
 
-@router.get("/project/{project_id}/share", status_code=status.HTTP_200_OK, response_model=schemas.ShareLinkResponse)
+
+@router.get(
+    "/project/{project_id}/share",
+    status_code=status.HTTP_200_OK,
+    response_model=schemas.ShareLinkResponse,
+)
 def share_project(
     project_id: int,
     with_: str = Query(alias="with"),
@@ -61,12 +66,20 @@ def share_project(
     )
     join_link = f"{settings.APP_BASE_URL}/join?token={token}"
 
-    email.send_share_invite_email(to_email=with_, project_name=project.name, join_link=join_link)
+    email.send_share_invite_email(
+        to_email=with_, project_name=project.name, join_link=join_link
+    )
 
-    return schemas.ShareLinkResponse(join_link=join_link, expires_in_hours=SHARE_LINK_EXPIRE_HOURS)
+    return schemas.ShareLinkResponse(
+        join_link=join_link, expires_in_hours=SHARE_LINK_EXPIRE_HOURS
+    )
 
 
-@router.get("/join", status_code=status.HTTP_200_OK, response_model=schemas.ProjectMemberResponse)
+@router.get(
+    "/join",
+    status_code=status.HTTP_200_OK,
+    response_model=schemas.ProjectMemberResponse,
+)
 def join_project(
     token: str,
     db: Session = Depends(get_db),
@@ -89,7 +102,7 @@ def join_project(
 
     existing_member = crud.get_project_member(db, project_id, current_user.id)
     if existing_member is not None:
-        return existing_member  
+        return existing_member
 
     member = schemas.ProjectMemberCreate(
         user_id=current_user.id,

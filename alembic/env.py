@@ -3,8 +3,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from app import \
-    models  # noqa: F401 — must be imported so Base.metadata sees all tables
+from app import models  # noqa: F401 — must be imported so Base.metadata sees all tables
 from app.config import settings
 from app.database import Base
 

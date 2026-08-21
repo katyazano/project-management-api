@@ -12,9 +12,9 @@ ses_client = boto3.client(
 
 
 def send_share_invite_email(to_email: str, project_name: str, join_link: str) -> None:
-    subject = f"You've been invited to the project \"{project_name}\""
+    subject = f'You\'ve been invited to the project "{project_name}"'
     body_text = (
-        f"You've been invited to collaborate on the project \"{project_name}\".\n\n"
+        f'You\'ve been invited to collaborate on the project "{project_name}".\n\n'
         f"Click the link below to join (this link expires in 48 hours):\n{join_link}\n\n"
         "If you weren't expecting this invite, you can safely ignore this email."
     )
@@ -43,4 +43,6 @@ def send_share_invite_email(to_email: str, project_name: str, join_link: str) ->
     except ClientError as e:
         # SES failures shouldn't crash the request — the link is still valid
         # and returned in the response even if the email didn't go out.
-        print(f"[SES] Failed to send invite email to {to_email}: {e.response['Error']['Message']}")
+        print(
+            f"[SES] Failed to send invite email to {to_email}: {e.response['Error']['Message']}"
+        )

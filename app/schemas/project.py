@@ -8,6 +8,7 @@ from app.models import ProjectRole
 # Project member schemas
 # ==========================================
 
+
 class ProjectMemberBase(BaseModel):
     user_id: int
     project_id: int
@@ -21,9 +22,11 @@ class ProjectMemberCreate(ProjectMemberBase):
 class ProjectMemberResponse(ProjectMemberBase):
     model_config = ConfigDict(from_attributes=True)
 
+
 # ==========================================
 # Document schemas
 # ==========================================
+
 
 class DocumentBase(BaseModel):
     file_name: str
@@ -43,9 +46,11 @@ class DocumentResponse(DocumentBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # ==========================================
 # Project schemas
 # ==========================================
+
 
 class ProjectBase(BaseModel):
     name: str
@@ -62,9 +67,11 @@ class ProjectResponse(ProjectBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # ==========================================
 # Share link schemas
 # ==========================================
+
 
 class ShareLinkResponse(BaseModel):
     join_link: str
