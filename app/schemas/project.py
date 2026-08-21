@@ -4,11 +4,10 @@ from pydantic import BaseModel, ConfigDict
 
 from app.models import ProjectRole
 
+
 # ==========================================
 # Project member schemas
 # ==========================================
-
-
 class ProjectMemberBase(BaseModel):
     user_id: int
     project_id: int
@@ -26,8 +25,6 @@ class ProjectMemberResponse(ProjectMemberBase):
 # ==========================================
 # Document schemas
 # ==========================================
-
-
 class DocumentBase(BaseModel):
     file_name: str
     file_size: int
@@ -50,8 +47,6 @@ class DocumentResponse(DocumentBase):
 # ==========================================
 # Project schemas
 # ==========================================
-
-
 class ProjectBase(BaseModel):
     name: str
     description: Optional[str]
@@ -64,6 +59,8 @@ class ProjectCreate(ProjectBase):
 class ProjectResponse(ProjectBase):
     id: int
     documents: list[DocumentResponse] = []
+    storage_used_bytes: int = 0
+    storage_limit_bytes: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,8 +68,6 @@ class ProjectResponse(ProjectBase):
 # ==========================================
 # Share link schemas
 # ==========================================
-
-
 class ShareLinkResponse(BaseModel):
     join_link: str
     expires_in_hours: int

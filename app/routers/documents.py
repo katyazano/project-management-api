@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import crud, models, s3, schemas
+from app.config import settings
 from app.database import get_db
 from app.dependencies import (
     require_document_editor_or_owner,
@@ -45,7 +46,7 @@ def upload_document(
     membership: models.ProjectMember = Depends(require_editor_or_owner),
 ):
     """Upload one or more documents to a specific project (owner and editor only)."""
-    created_documents = []
+    file_data = []
     for file in files:
         extension = (
             "." + file.filename.rsplit(".", 1)[-1].lower()
@@ -59,11 +60,27 @@ def upload_document(
                 "Only .pdf and .docx are allowed.",
             )
         contents = file.file.read()
-        file_size = len(contents)
+        file_data.append((file, contents, extension))
+
+    incoming_size = sum(len(contents) for _, contents, _ in file_data)
+    current_usage = crud.get_project_storage_used(db, project_id)
+
+    if current_usage + incoming_size > settings.MAX_PROJECT_STORAGE_BYTES:
+        remaining = max(settings.MAX_PROJECT_STORAGE_BYTES - current_usage, 0)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"This upload would exceed the project's storage limit. "
+                f"Remaining space: {remaining} bytes, requested: {incoming_size} bytes."
+            ),
+        )
+
+    created_documents = []
+    for file, contents, extension in file_data:
         s3_key = f"projects/{project_id}/{uuid.uuid4()}{extension}"
         s3.upload_file(io.BytesIO(contents), s3_key, file.content_type)
         document = schemas.DocumentCreate(
-            file_name=file.filename, file_size=file_size, s3_key=s3_key
+            file_name=file.filename, file_size=len(contents), s3_key=s3_key
         )
         created_documents.append(
             crud.create_document(db=db, document=document, project_id=project_id)
@@ -102,11 +119,26 @@ def update_document(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, detail="Only .pdf and .docx are allowed."
         )
+
     contents = file.file.read()
-    file_size = len(contents)
+    new_size = len(contents)
+
+    current_usage = (
+        crud.get_project_storage_used(db, document.project_id) - document.file_size
+    )
+    if current_usage + new_size > settings.MAX_PROJECT_STORAGE_BYTES:
+        remaining = max(settings.MAX_PROJECT_STORAGE_BYTES - current_usage, 0)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"This update would exceed the project's storage limit. "
+                f"Remaining space: {remaining} bytes, requested: {new_size} bytes."
+            ),
+        )
+
     s3.upload_file(io.BytesIO(contents), document.s3_key, file.content_type)
     return crud.update_document(
-        db, document_id, file_name=file.filename, file_size=file_size
+        db, document_id, file_name=file.filename, file_size=new_size
     )
 
 

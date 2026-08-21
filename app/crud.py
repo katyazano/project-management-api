@@ -1,4 +1,7 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+from app.config import settings
 
 from . import models, schemas
 
@@ -28,7 +31,11 @@ def create_user(db: Session, user: schemas.UserCreate, hashed_password: str):
 # PROJECTS
 # ==========================================
 def get_project(db: Session, project_id: int):
-    return db.query(models.Project).filter(models.Project.id == project_id).first()
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if project is not None:
+        project.storage_used_bytes = get_project_storage_used(db, project_id)
+        project.storage_limit_bytes = settings.MAX_PROJECT_STORAGE_BYTES
+    return project
 
 
 def get_projects(db: Session, user_id: int):
@@ -188,3 +195,12 @@ def get_membership(
         )
         .first()
     )
+
+
+def get_project_storage_used(db: Session, project_id: int) -> int:
+    total = (
+        db.query(func.coalesce(func.sum(models.Document.file_size), 0))
+        .filter(models.Document.project_id == project_id)
+        .scalar()
+    )
+    return total
