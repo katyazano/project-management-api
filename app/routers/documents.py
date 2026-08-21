@@ -52,7 +52,8 @@ def upload_document(
         if extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=f"File '{file.filename}' has an unsupported type. Only .pdf and .docx are allowed.",
+                f"File '{file.filename}' has an unsupported type. "
+                "Only .pdf and .docx are allowed."
             )
         contents = file.file.read()
         file_size = len(contents)
