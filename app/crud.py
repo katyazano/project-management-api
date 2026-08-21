@@ -173,7 +173,9 @@ def delete_document(db: Session, document_id: int):
 # ==========================================
 # HELPERS
 # ==========================================
-def get_membership(db: Session, project_id: int, user_id: int) -> models.ProjectMember | None:
+def get_membership(
+    db: Session, project_id: int, user_id: int
+) -> models.ProjectMember | None:
     """Returns the membership if it exists, or None."""
     project = get_project(db, project_id)
     if project is None:

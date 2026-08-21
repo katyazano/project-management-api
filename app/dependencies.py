@@ -16,7 +16,9 @@ def require_member(
 
     membership = crud.get_membership(db, project_id, current_user.id)
     if membership is None:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="No access to this project")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="No access to this project"
+        )
 
     return membership
 
@@ -32,6 +34,7 @@ def require_role(*allowed_roles: models.ProjectRole):
             raise HTTPException(status.HTTP_403_FORBIDDEN, 
                                 detail="Not enough permissions to perform this action")
         return membership
+
     return dependency
 
 
@@ -62,6 +65,7 @@ def require_document_role(*allowed_roles: models.ProjectRole):
             raise HTTPException(status.HTTP_403_FORBIDDEN, 
                                 detail="Not enough permissions to perform this action")
         return document, membership
+
     return dependency
 
 

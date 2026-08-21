@@ -13,7 +13,11 @@ router = APIRouter(tags=["Access"])
 
 SHARE_LINK_EXPIRE_HOURS = 48
 
-@router.post("/project/{project_id}/invite", status_code=status.HTTP_200_OK, response_model=schemas.ProjectMemberResponse)
+@router.post(
+    "/project/{project_id}/invite",
+    status_code=status.HTTP_200_OK,
+    response_model=schemas.ProjectMemberResponse,
+)
 def invite_user(
     project_id: int,
     user: str,
@@ -31,10 +35,14 @@ def invite_user(
 
     if existing_member is not None:
         if existing_member.role == models.ProjectRole.OWNER:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cannot change the owner's role")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, detail="Cannot change the owner's role"
+            )
         return crud.update_project_member_role(db, existing_member, new_role)
 
-    member = schemas.ProjectMemberCreate(user_id=invited_user.id, project_id=project_id, role=new_role)
+    member = schemas.ProjectMemberCreate(
+        user_id=invited_user.id, project_id=project_id, role=new_role
+    )
     return crud.create_project_member(db, member)
 
 @router.get("/project/{project_id}/share", status_code=status.HTTP_200_OK, response_model=schemas.ShareLinkResponse)
