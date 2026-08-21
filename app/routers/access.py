@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
-from app import crud, models, schemas
+from app import crud, models, schemas, security
 from app.database import get_db
 from app.dependencies import require_owner
+from app.config import settings
+from app import email
 
 router = APIRouter(tags=["Access"])
 
+SHARE_LINK_EXPIRE_HOURS = 48
 
 @router.post("/project/{project_id}/invite", status_code=status.HTTP_200_OK, response_model=schemas.ProjectMemberResponse)
 def invite_user(
@@ -32,10 +37,55 @@ def invite_user(
     member = schemas.ProjectMemberCreate(user_id=invited_user.id, project_id=project_id, role=new_role)
     return crud.create_project_member(db, member)
 
-# #TODO: terminar los siguientes endpoints:
-# # Optional
-# @app.get("/project/{project_id}/share", tags=["Access"])
-# def share_project(project_id: int, email: str,
-#   db: Session =Depends(get_db), current_user = Depends(get_current_user)):
-#     """Send a GET /join link with correct hashed token to specified email."""
-#     pass
+@router.get("/project/{project_id}/share", status_code=status.HTTP_200_OK, response_model=schemas.ShareLinkResponse)
+def share_project(
+    project_id: int,
+    with_: str = Query(alias="with"),
+    membership: models.ProjectMember = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    project = crud.get_project(db, project_id)
+
+    token = security.create_share_token(
+        project_id=project_id,
+        email=with_,
+        expires_delta=timedelta(hours=SHARE_LINK_EXPIRE_HOURS),
+    )
+    join_link = f"{settings.APP_BASE_URL}/join?token={token}"
+
+    email.send_share_invite_email(to_email=with_, project_name=project.name, join_link=join_link)
+
+    return schemas.ShareLinkResponse(join_link=join_link, expires_in_hours=SHARE_LINK_EXPIRE_HOURS)
+
+
+@router.get("/join", status_code=status.HTTP_200_OK, response_model=schemas.ProjectMemberResponse)
+def join_project(
+    token: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user),
+):
+    """Join a project via a shareable link."""
+    payload = security.decode_share_token(token)
+    project_id = payload["project_id"]
+    invited_email = payload["email"]
+
+    if current_user.email.lower() != invited_email.lower():
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="This invite link was issued for a different email address",
+        )
+
+    project = crud.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    existing_member = crud.get_project_member(db, project_id, current_user.id)
+    if existing_member is not None:
+        return existing_member  
+
+    member = schemas.ProjectMemberCreate(
+        user_id=current_user.id,
+        project_id=project_id,
+        role=models.ProjectRole.EDITOR,
+    )
+    return crud.create_project_member(db, member)

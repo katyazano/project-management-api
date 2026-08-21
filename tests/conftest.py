@@ -13,6 +13,8 @@ os.environ.setdefault("AWS_REGION", "us-east-1")
 os.environ.setdefault("S3_BUCKET_NAME", "test-bucket")
 os.environ.setdefault("AWS_SECURITY_TOKEN", "testing")
 os.environ.setdefault("AWS_SESSION_TOKEN", "testing")
+os.environ.setdefault("SES_SENDER_EMAIL", "test-sender@example.com")
+os.environ.setdefault("APP_BASE_URL", "http://localhost:8000")
 
 import boto3
 import pytest

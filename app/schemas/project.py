@@ -4,8 +4,9 @@ from pydantic import BaseModel, ConfigDict
 
 from app.models import ProjectRole
 
+# ==========================================
 # Project member schemas
-
+# ==========================================
 
 class ProjectMemberBase(BaseModel):
     user_id: int
@@ -20,9 +21,9 @@ class ProjectMemberCreate(ProjectMemberBase):
 class ProjectMemberResponse(ProjectMemberBase):
     model_config = ConfigDict(from_attributes=True)
 
-
+# ==========================================
 # Document schemas
-
+# ==========================================
 
 class DocumentBase(BaseModel):
     file_name: str
@@ -42,9 +43,9 @@ class DocumentResponse(DocumentBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-
+# ==========================================
 # Project schemas
-
+# ==========================================
 
 class ProjectBase(BaseModel):
     name: str
@@ -60,3 +61,11 @@ class ProjectResponse(ProjectBase):
     documents: list[DocumentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+# ==========================================
+# Share link schemas
+# ==========================================
+
+class ShareLinkResponse(BaseModel):
+    join_link: str
+    expires_in_hours: int

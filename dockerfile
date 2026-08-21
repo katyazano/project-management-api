@@ -36,7 +36,9 @@ COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy your app code and alembic.ini into the container
-COPY . .
+COPY ./app ./app
+COPY ./alembic.ini ./alembic.ini
+COPY ./alembic ./alembic
 
 # Run as a non-root user — good practice, some CI/security scanners flag
 # containers that run as root by default
