@@ -14,4 +14,3 @@ app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(access.router)
-

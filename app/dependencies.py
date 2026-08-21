@@ -16,7 +16,9 @@ def require_member(
 
     membership = crud.get_membership(db, project_id, current_user.id)
     if membership is None:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="No access to this project")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="No access to this project"
+        )
 
     return membership
 
@@ -29,8 +31,12 @@ def require_role(*allowed_roles: models.ProjectRole):
     ) -> models.ProjectMember:
         membership = require_member(project_id, db, current_user)
         if membership.role not in allowed_roles:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not enough permissions to perform this action")
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions to perform this action",
+            )
         return membership
+
     return dependency
 
 
@@ -45,7 +51,9 @@ def require_document_member(
 
     membership = crud.get_membership(db, document.project_id, current_user.id)
     if membership is None:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="No access to this project")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="No access to this project"
+        )
 
     return document, membership
 
@@ -58,11 +66,19 @@ def require_document_role(*allowed_roles: models.ProjectRole):
     ):
         document, membership = require_document_member(document_id, db, current_user)
         if membership.role not in allowed_roles:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not enough permissions to perform this action")
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions to perform this action",
+            )
         return document, membership
+
     return dependency
 
 
 require_owner = require_role(models.ProjectRole.OWNER)
-require_editor_or_owner = require_role(models.ProjectRole.OWNER, models.ProjectRole.EDITOR)
-require_document_editor_or_owner = require_document_role(models.ProjectRole.OWNER, models.ProjectRole.EDITOR)
+require_editor_or_owner = require_role(
+    models.ProjectRole.OWNER, models.ProjectRole.EDITOR
+)
+require_document_editor_or_owner = require_document_role(
+    models.ProjectRole.OWNER, models.ProjectRole.EDITOR
+)
