@@ -10,21 +10,26 @@ def require_member(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user),
 ) -> models.ProjectMember:
-    """Any project member (owner, editor, or viewer) may proceed."""
-    return crud.get_membership_or_404(db, project_id, current_user.id)
+    project = crud.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    membership = crud.get_membership(db, project_id, current_user.id)
+    if membership is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="No access to this project")
+
+    return membership
 
 
 def require_role(*allowed_roles: models.ProjectRole):
-    """Factory: returns a dependency that only lets the given roles through."""
     def dependency(
         project_id: int,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(security.get_current_user),
     ) -> models.ProjectMember:
-        membership = crud.get_membership_or_404(db, project_id, current_user.id)
+        membership = require_member(project_id, db, current_user)
         if membership.role not in allowed_roles:
-            raise HTTPException(status.HTTP_403_FORBIDDEN,
-                                detail="Not enough permissions to perform this action")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not enough permissions to perform this action")
         return membership
     return dependency
 
@@ -34,21 +39,26 @@ def require_document_member(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user),
 ):
-    """Same as require_member, but resolved through a document_id instead of project_id."""
-    return crud.get_document_membership_or_404(db, document_id, current_user.id)
+    document = crud.get_document(db, document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    membership = crud.get_membership(db, document.project_id, current_user.id)
+    if membership is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="No access to this project")
+
+    return document, membership
 
 
 def require_document_role(*allowed_roles: models.ProjectRole):
-    """Document-keyed equivalent of require_role."""
     def dependency(
         document_id: int,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(security.get_current_user),
     ):
-        document, membership = crud.get_document_membership_or_404(db, document_id, current_user.id)
+        document, membership = require_document_member(document_id, db, current_user)
         if membership.role not in allowed_roles:
-            raise HTTPException(status.HTTP_403_FORBIDDEN,
-                                detail="Not enough permissions to perform this action")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not enough permissions to perform this action")
         return document, membership
     return dependency
 
