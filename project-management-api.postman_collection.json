@@ -8,7 +8,9 @@
     { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
     { "key": "access_token", "value": "", "type": "string" },
     { "key": "project_id", "value": "1", "type": "string" },
-    { "key": "document_id", "value": "1", "type": "string" }
+    { "key": "document_id", "value": "1", "type": "string" },
+    { "key": "invite_email", "value": "invitee@example.com", "type": "string" },
+    { "key": "share_token", "value": "", "type": "string" }
   ],
   "auth": {
     "type": "bearer",
@@ -279,6 +281,54 @@
               "query": [
                 { "key": "user", "value": "someuser" },
                 { "key": "role", "value": "editor" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Share Project (send join link)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const data = pm.response.json();",
+                  "    const url = new URL(data.join_link);",
+                  "    const token = url.searchParams.get('token');",
+                  "    if (token) {",
+                  "        pm.collectionVariables.set('share_token', token);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/project/{{project_id}}/share?with={{invite_email}}",
+              "host": ["{{base_url}}"],
+              "path": ["project", "{{project_id}}", "share"],
+              "query": [
+                { "key": "with", "value": "{{invite_email}}" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Join Project (redeem share link)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/join?token={{share_token}}",
+              "host": ["{{base_url}}"],
+              "path": ["join"],
+              "query": [
+                { "key": "token", "value": "{{share_token}}" }
               ]
             }
           },
