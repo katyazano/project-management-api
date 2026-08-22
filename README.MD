@@ -6,30 +6,32 @@ A REST API for creating, updating, sharing, and deleting projects and their atta
 
 - User registration and JWT-based authentication (1 hour token expiry)
 - Create, read, update, and delete projects
-- Role-based project access — **owner** (full control) and **participant** (can edit, cannot delete)
+- Role-based project access — **owner** (full control), **editor** (can edit, cannot delete) and **viewer** (can view, cannot delete or edit)
 - Upload, update, download, and remove project documents (`.docx`, `.pdf`)
 - Invite other users to a project
-- Shareable project links via email (optional)
+- Shareable project links via email
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Language | Python 3.12+ |
-| Web framework | FastAPI |
+| Web framework | FastAPI & Pydantic |
 | Database | PostgreSQL |
-| ORM | SQLAlchemy |
+| ORM & Migrations | SQLAlchemy + Alembic |
 | Auth | JWT (PyJWT) + bcrypt |
-| File storage | AWS S3 |
-| File processing | AWS Lambda (image resize, size calculation on S3 events) |
-| Containerization | Docker / Docker Compose |
-| CI/CD | GitHub Actions / GitLab CI |
-| Dependency management | Poetry |
+| Cloud Services | AWS S3 (Storage) + AWS SES (Emails) |
+| Testing | Pytest + Moto (AWS Mocking) |
+| Containerization | Docker / Docker Compose (Multi-stage builds) |
+| CI/CD | GitHub Actions |
+| Dependency management | Poetry
 
 ## Project Structure
 
 ```
 .
+├── .github/              # Workflows
+├── alembic/              # Database migration versions
 ├── app/
 │   ├── main.py          # Route definitions
 │   ├── crud.py           # Database access layer
@@ -38,7 +40,9 @@ A REST API for creating, updating, sharing, and deleting projects and their atta
 │   ├── security.py       # Password hashing, JWT creation/validation
 │   ├── config.py         # Environment-based settings
 │   └── database.py       # DB engine/session setup
+├── docs/                # Project documentation
 ├── tests/                # Test suite
+├── alembic.ini           # Alembic configuration
 ├── docker-compose.yml
 ├── Dockerfile
 ├── pyproject.toml
@@ -78,6 +82,10 @@ A REST API for creating, updating, sharing, and deleting projects and their atta
    | `SECRET_KEY` | Secret used to sign JWTs | — |
    | `ALGORITHM` | JWT signing algorithm | `HS256` |
    | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime in minutes | `60` |
+   | `AWS_ACCESS_KEY_ID` | AWS IAM User key |
+   | `AWS_SECRET_ACCESS_KEY` | AWS IAM Secret |
+   | `AWS_REGION` | AWS Region | `us-east-1` |
+   | `SES_SENDER_EMAIL` | Verified AWS SES email address |
 
    > Never commit your real `.env` file. Keep `SECRET_KEY` out of version control and rotate it if it's ever exposed.
 
@@ -148,6 +156,19 @@ Collection variables (`base_url`, `access_token`, `project_id`, `document_id`) c
 ```bash
 poetry run pytest
 ```
+## Key Scaling Upgrades
+
+- Load Balancing: An ALB to distribute traffic across multiple container replicas.
+- Microservices: Decoupling Auth, Projects, and Documents into isolated services to allow independent scaling.
+- Database Sharding & Caching: Dedicated databases per service and a Redis cache to optimize repetitive read queries.
+- Asynchronous Processing: Moving AWS SES email dispatching to a background worker listening to an SQS queue, ensuring the API responds instantly to users without waiting for cloud providers.
+
+## Database Design & ORM
+
+While the application relies on **SQLAlchemy** as its ORM and **Alembic** for automated migrations, the foundational database architecture is strictly normalized to the Third Normal Form (3NF). 
+
+To demonstrate the underlying relational logic, integrity constraints, and performance indexing without the ORM abstraction, a standalone raw SQL definition is provided:
+- **[`schema.sql`](./docs/schema.sql):** Contains the pure PostgreSQL DDL statements for custom ENUMs, tables, and indexes.
 
 ## Roadmap
 
