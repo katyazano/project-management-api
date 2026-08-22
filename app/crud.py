@@ -1,5 +1,7 @@
-from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+from app.config import settings
 
 from . import models, schemas
 
@@ -29,7 +31,11 @@ def create_user(db: Session, user: schemas.UserCreate, hashed_password: str):
 # PROJECTS
 # ==========================================
 def get_project(db: Session, project_id: int):
-    return db.query(models.Project).filter(models.Project.id == project_id).first()
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if project is not None:
+        project.storage_used_bytes = get_project_storage_used(db, project_id)
+        project.storage_limit_bytes = settings.MAX_PROJECT_STORAGE_BYTES
+    return project
 
 
 def get_projects(db: Session, user_id: int):
@@ -143,14 +149,14 @@ def get_document(db: Session, document_id: int):
     return db.query(models.Document).filter(models.Document.id == document_id).first()
 
 
-def get_document_membership_or_404(db: Session, document_id: int, user_id: int):
-    """Confirms the document exists and the user has access to its parent project."""
+def get_document_membership(db: Session, document_id: int, user_id: int):
+    """Returns (doc, member) if both exist and the user has access, else (None, None)."""
     document = get_document(db, document_id)
     if document is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
-        )
-    membership = get_membership_or_404(db, document.project_id, user_id)
+        return None, None
+    membership = get_membership(db, document.project_id, user_id)
+    if membership is None:
+        return None, None
     return document, membership
 
 
@@ -174,21 +180,14 @@ def delete_document(db: Session, document_id: int):
 # ==========================================
 # HELPERS
 # ==========================================
-def get_membership_or_404(
+def get_membership(
     db: Session, project_id: int, user_id: int
-) -> models.ProjectMember:
-    """
-    Confirms the project exists and the user is a member of it.
-    Raises 404 if the project doesn't exist, 403 if the user has no access.
-    Returns the ProjectMember row (so callers can check .role).
-    """
+) -> models.ProjectMember | None:
+    """Returns the membership if it exists, or None."""
     project = get_project(db, project_id)
     if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
-        )
-
-    member = (
+        return None
+    return (
         db.query(models.ProjectMember)
         .filter(
             models.ProjectMember.project_id == project_id,
@@ -196,9 +195,12 @@ def get_membership_or_404(
         )
         .first()
     )
-    if member is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="No access to this project"
-        )
 
-    return member
+
+def get_project_storage_used(db: Session, project_id: int) -> int:
+    total = (
+        db.query(func.coalesce(func.sum(models.Document.file_size), 0))
+        .filter(models.Document.project_id == project_id)
+        .scalar()
+    )
+    return total

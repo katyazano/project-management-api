@@ -53,6 +53,20 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 
+def create_share_token(
+    project_id: int, email: str, expires_delta: timedelta = timedelta(hours=48)
+) -> str:
+    """Creates a signed, time-limited token for sharing project access via email."""
+    expire = datetime.now(timezone.utc) + expires_delta
+    to_encode = {
+        "project_id": project_id,
+        "email": email,
+        "purpose": "project_share",
+        "exp": expire,
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
 # ==========================================
 # DECODE TOKEN AND GET CURRENT USER
 # ==========================================
@@ -81,7 +95,7 @@ def get_current_user(
         if username is None:
             raise credentials_exception
 
-        # Pydantic validation (Asegúrate de tener esto en schemas.py)
+        # Pydantic validation
         token_data = schemas.TokenData(username=username)
 
     except InvalidTokenError:
@@ -93,3 +107,22 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def decode_share_token(token: str) -> dict:
+    """Decodes and validates a share token. Raises HTTPException on any failure."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired share link",
+    )
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+    except InvalidTokenError:
+        raise credentials_exception
+
+    if payload.get("purpose") != "project_share":
+        raise credentials_exception
+
+    return payload

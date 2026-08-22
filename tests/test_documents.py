@@ -155,3 +155,65 @@ def test_viewer_cannot_delete_document(
     assert response.status_code == 403
 
     assert len(mock_s3.list_objects_v2(Bucket="test-bucket")["Contents"]) == 1
+
+
+def test_upload_rejected_over_limit(mock_s3, client, auth_headers, monkeypatch):
+    monkeypatch.setattr("app.config.settings.MAX_PROJECT_STORAGE_BYTES", 10)
+    project_id = create_project(client, auth_headers)
+
+    response = client.post(
+        f"/project/{project_id}/documents",
+        files=[
+            ("files", ("big.pdf", b"more than ten bytes of content", "application/pdf"))
+        ],
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+
+    objects = mock_s3.list_objects_v2(Bucket="test-bucket")
+    assert "Contents" not in objects
+
+
+def test_upload_allowed_within_limit(mock_s3, client, auth_headers, monkeypatch):
+    monkeypatch.setattr("app.config.settings.MAX_PROJECT_STORAGE_BYTES", 1024 * 1024)
+    project_id = create_project(client, auth_headers)
+
+    response = client.post(
+        f"/project/{project_id}/documents",
+        files=[("files", ("small.pdf", b"tiny content", "application/pdf"))],
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    objects = mock_s3.list_objects_v2(Bucket="test-bucket")
+    assert len(objects["Contents"]) == 1
+
+
+def test_upload_rejected_when_existing_documents_push_over_limit(
+    mock_s3, client, auth_headers, monkeypatch
+):
+    """Confirms the limit checks cumulative project usage, not just the new upload's own size."""
+    monkeypatch.setattr("app.config.settings.MAX_PROJECT_STORAGE_BYTES", 20)
+    project_id = create_project(client, auth_headers)
+
+    first = client.post(
+        f"/project/{project_id}/documents",
+        files=[
+            ("files", ("first.pdf", b"fifteen bytes!!", "application/pdf"))
+        ],  # 15 bytes
+        headers=auth_headers,
+    )
+    assert first.status_code == 201
+
+    second = client.post(
+        f"/project/{project_id}/documents",
+        files=[
+            ("files", ("second.pdf", b"ten bytes!", "application/pdf"))
+        ],  # 10 bytes, 15+10 > 20
+        headers=auth_headers,
+    )
+    assert second.status_code == 400
+
+    objects = mock_s3.list_objects_v2(Bucket="test-bucket")
+    assert len(objects["Contents"]) == 1

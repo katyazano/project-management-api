@@ -21,16 +21,16 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    email = Column(String, unique=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
 
 
 class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
+    name = Column(String, index=True, nullable=False)
     description = Column(String)
 
     members = relationship(
@@ -55,9 +55,9 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True)
-    file_name = Column(String)
-    s3_key = Column(String)
-    file_size = Column(Integer)
-    project_id = Column(Integer, ForeignKey("projects.id"))
+    file_name = Column(String, nullable=False)
+    s3_key = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
 
     project = relationship("Project", back_populates="documents")

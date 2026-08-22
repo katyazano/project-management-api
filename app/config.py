@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
     S3_BUCKET_NAME: str
 
+    # SES configuration
+    SES_SENDER_EMAIL: str
+    APP_BASE_URL: str = "http://localhost:8000"
+
+    MAX_PROJECT_STORAGE_BYTES: int = 50 * 1024 * 1024  # 50 MB default
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property
